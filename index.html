@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Face-Lift</title>
+</head>
+<body>
+    <img src="img/picture.jpg" id="image" style="display: none">
+    <canvas id="canvas" width="480" height="360"></canvas>
+    <button id="faceLiftButton">瘦脸</button>
+
+    <script src="lib/jquery-1.11.1.min.js"></script>
+    <script src="lib/jquery.facedetection.js"></script>
+    <script>
+        function faceLiftCompute(pixes, size, area) {
+            var imageData = pixes;
+
+            // 根据二元一次方程式计算得出方程式：y = -4*size/height^2*x^2 + 4*size/height*x
+            var moveDistance = [];
+            for (var i = 0; i < imageData.height; i++) {
+                moveDistance[i] = -4 * size * i * i / Math.pow(area.height, 2) + 4 * size * i / area.height;
+            }
+
+            var allDataArr = [];
+            for (var ii = 0; ii < imageData.data.length; ii++) {
+                allDataArr[ii] = imageData.data[ii];
+            }
+
+            // 行内数据
+            var rawData = [];
+            for (var j = 0; j < imageData.height; j++) {
+                rawData.push(allDataArr.slice(4 * j * imageData.width, 4 * (j + 1) * imageData.width));
+            }
+
+            // 对行内数据进行操作
+            for (var k = 0; k < imageData.height; k++) {
+                if (size > 0) {
+                    moveDistance[k] = Math.ceil(moveDistance[k]);
+                } else {
+                    moveDistance[k] = Math.floor(moveDistance[k]);
+                }
+                var leftArr = rawData[k].slice(0, Math.floor(rawData[k].length/2));
+                var rightArr = rawData[k].slice(Math.floor(rawData[k].length/2), rawData[k].length);
+                var spliceAvg = Math.floor(leftArr.length/4/(Math.abs(moveDistance[k]) + 1));
+                if (Math.abs(moveDistance[k]) > 0) {
+                    if (size < 0) {
+                        for (var z = 1; z <= Math.abs(moveDistance[k]); z++) {
+                            leftArr.splice(4 * (spliceAvg - 1) * z, 4);
+                            rightArr.splice(4 * (spliceAvg - 1) * z, 0, rightArr[4 * (spliceAvg - 1) * z], rightArr[4 * (spliceAvg - 1) * z + 1], rightArr[4 * (spliceAvg - 1) * z + 2], rightArr[4 * (spliceAvg - 1) * z + 3]);
+                        }
+                    } else {
+                        for (var z = 1; z <= moveDistance[k]; z++) {
+                            rightArr.splice(4 * (spliceAvg - 1) * z, 4);
+                            leftArr.splice(4 * (spliceAvg - 1) * z, 0, leftArr[4 * (spliceAvg - 1) * z], leftArr[4 * (spliceAvg - 1) * z + 1], leftArr[4 * (spliceAvg - 1) * z + 2], leftArr[4 * (spliceAvg - 1) * z + 3]);
+                        }
+                    }
+                    rawData[k] = leftArr.concat(rightArr);
+                }
+            }
+
+            // 将多行数据合成一行
+            var endRawData = [];
+            for (var x = 0; x < imageData.height; x++) {
+                Array.prototype.push.apply(endRawData, rawData[x]);
+            }
+
+            for(var y = 0; y < endRawData.length; y++) {
+                imageData.data[y] = endRawData[y];
+            }
+            return imageData;
+        }
+
+        function faceLift(pixes) {
+            var imageData = pixes;
+
+            var sizeLeft = {
+                x: 4
+            };
+            var sizeRight = {
+                x: -4
+            };
+            var areaLeft = {
+                width: imageData.width/2,
+                height: imageData.height,
+                x: imageData.x,
+                y: imageData.y + 20
+            };
+            var areaRight = {
+                width: imageData.width/2,
+                height: imageData.height,
+                x: imageData.x + imageData.width/2,
+                y: imageData.y + 20
+            };
+            var pixesLeft = ctx.getImageData(imageData.x, imageData.y + 20, imageData.width/2, imageData.height);
+            var pixesRight = ctx.getImageData(imageData.x + imageData.width/2, imageData.y + 20, imageData.width/2, imageData.height);
+
+            var imageDataLeft = faceLiftCompute(pixesLeft, sizeLeft.x, areaLeft);
+            var imageDataRight = faceLiftCompute(pixesRight, sizeRight.x, areaRight);
+
+            ctx.clearRect(imageData.x, imageData.y + 20, imageData.width/2 - 2, imageData.height - 1);
+            ctx.putImageData(imageDataLeft, imageData.x, imageData.y + 20);
+            ctx.clearRect(imageData.x + imageData.width/2, imageData.y + 20, imageData.width/2 - 2, imageData.height  - 1);
+            ctx.putImageData(imageDataRight, imageData.x + imageData.width/2, imageData.y + 20);
+        }
+
+        var canvas = document.getElementById('canvas');
+        var ctx = canvas.getContext('2d');
+        var imageDom = document.getElementById('image');
+        var image = new Image();
+
+        image.src = imageDom.src;
+        image.onload = function() {
+            canvas.width = image.width;
+            canvas.height = image.height;
+            ctx.drawImage(image, 0, 0);
+        }
+
+        document.getElementById('faceLiftButton').addEventListener('click', function(e) {
+            e.preventDefault();
+            $('#image').faceDetection({
+                complete: function (faces) {
+                    console.log(faces);
+                    for(var i = 0; i < faces.length; i++) {
+                        faceLift(faces[i]);
+                    }
+                }
+            });
+        })
+    </script>
+</body>
+</html>
